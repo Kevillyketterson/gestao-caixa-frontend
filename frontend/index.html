@@ -1,0 +1,120 @@
+<script>
+const API_URL = 'https://gestao-caixa-backend.onrender.com';
+
+let clientes = [];
+let produtos = [];
+let vendas   = [];
+
+async function fetchClientes(){
+  const res = await fetch(`${API_URL}/clientes`);
+  clientes = (await res.json()).map(c=>c.nome);
+  renderClientes();
+}
+
+async function addCliente(){
+  if(!clienteNome.value) return;
+  const res = await fetch(`${API_URL}/clientes`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome: clienteNome.value})
+  });
+  if(res.ok){ clienteNome.value=''; await fetchClientes(); }
+  else alert('Erro ao cadastrar cliente');
+}
+
+async function fetchProdutos(){
+  const res = await fetch(`${API_URL}/produtos`);
+  produtos = await res.json();
+  renderProdutos();
+}
+
+async function addProduto(){
+  if(!produtoNome.value || !produtoValor.value) return;
+  const res = await fetch(`${API_URL}/produtos`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome: produtoNome.value, valor:+produtoValor.value})
+  });
+  if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); }
+  else alert('Erro ao cadastrar produto');
+}
+
+async function fetchVendas(){
+  const res = await fetch(`${API_URL}/vendas`);
+  vendas = await res.json();
+  renderVendas();
+}
+
+async function registrarVenda(){
+  const cliente = vendaCliente.value;
+  const p = produtos[vendaProduto.value];
+  const desconto = parseFloat(vendaDesconto.value)||0;
+  const total = parseFloat(vendaTotal.value);
+
+  if(!cliente||!p) return alert('Selecione cliente e produto');
+
+  const res = await fetch(`${API_URL}/vendas`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      cliente,
+      produto:p.nome,
+      valor:p.valor,
+      desconto,
+      total
+    })
+  });
+  if(res.ok){
+    vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
+    await fetchVendas();
+  }else alert('Erro ao registrar venda');
+}
+
+// Renderização (sem alteração significativa)
+function renderClientes(){
+  clientesTabela.innerHTML=''; vendaCliente.innerHTML='<option value="">Selecione o cliente</option>';
+  clientes.forEach((c,i)=>{
+    clientesTabela.innerHTML+=`<tr><td>${c}</td><td><button onclick="deleteCliente(${i})">❌</button></td></tr>`;
+    vendaCliente.innerHTML+=`<option>${c}</option>`;
+  });
+}
+function deleteCliente(i){ /* você pode implementar DELETE via backend se quiser */ clientes.splice(i,1); renderClientes(); }
+
+function renderProdutos(){
+  produtosTabela.innerHTML=''; vendaProduto.innerHTML='<option value="">Selecione o produto</option>';
+  produtos.forEach((p,i)=>{
+    produtosTabela.innerHTML+=`<tr><td>${p.nome}</td><td>R$ ${p.valor.toFixed(2)}</td><td><button onclick="deleteProduto(${i})">❌</button></td></tr>`;
+    vendaProduto.innerHTML+=`<option value="${i}">${p.nome}</option>`;
+  });
+}
+function deleteProduto(i){ produtos.splice(i,1); renderProdutos(); }
+
+function atualizarValorVenda(){
+  const p = produtos[vendaProduto.value];
+  vendaValor.value = p?p.valor.toFixed(2):'';
+  vendaDesconto.value=''; vendaTotal.value=vendaValor.value;
+}
+
+function calcularTotal(){
+  const valor = parseFloat(vendaValor.value)||0;
+  let desconto = parseFloat(vendaDesconto.value)||0;
+  if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
+  vendaTotal.value=(valor-desconto).toFixed(2);
+}
+
+function renderVendas(){
+  vendasTabela.innerHTML='';
+  let saldoTotal=0;
+  vendas.forEach(v=>{
+    saldoTotal+=v.total;
+    vendasTabela.innerHTML+=`<tr>
+      <td>${v.cliente}</td><td>${v.produto}</td><td>R$ ${v.valor.toFixed(2)}</td><td>R$ ${v.desconto.toFixed(2)}</td><td>R$ ${v.total.toFixed(2)}</td><td>${new Date(v.data).toLocaleString()}</td>
+    </tr>`;
+  });
+  document.getElementById('saldo').innerText=saldoTotal.toFixed(2);
+}
+
+function init(){ fetchClientes(); fetchProdutos(); fetchVendas(); }
+
+init();
+</script>
