@@ -75,10 +75,11 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <!-- HISTÓRICO -->
 <div class="card">
 <h2>📜 Histórico de Vendas</h2>
-<input id="searchVendas" placeholder="Pesquisar por cliente ou produto" oninput="filtrarVendas()">
+<input id="searchVendas" placeholder="Pesquisar por cliente, produto ou código" oninput="filtrarVendas()">
 <table>
 <thead>
 <tr>
+<th>Código</th>
 <th>Cliente</th>
 <th>Produtos</th>
 <th>Total</th>
@@ -265,7 +266,7 @@ async function registrarVenda(){
       body: JSON.stringify({cliente: cliente.nome, itens: vendaAtual})
     });
     if(res.ok){
-      const data = await res.json(); // <- converte a resposta para JSON
+      const data = await res.json();
       gerarComprovantePDF({cliente: cliente.nome, itens: data.itens || vendaAtual, codigo: data.codigo});
       vendaAtual=[]; renderProdutosSelecionados(); vendaCliente.value='';
       fetchVendas();
@@ -344,6 +345,7 @@ function renderVendas(){
     const totalVenda = v.itens.reduce((s,i)=>s+i.total,0);
     saldoTotal += totalVenda;
     vendasTabela.innerHTML += `<tr>
+      <td>${v.codigo || '—'}</td>
       <td>${v.cliente}</td>
       <td>${produtosStr}</td>
       <td>R$ ${totalVenda.toFixed(2)}</td>
@@ -357,9 +359,10 @@ function filtrarVendas(){
   const filtro = searchVendas.value.toLowerCase();
   const linhas = vendasTabela.getElementsByTagName('tr');
   Array.from(linhas).forEach(l=>{
-    const cliente = l.cells[0].innerText.toLowerCase();
-    const produtos = l.cells[1].innerText.toLowerCase();
-    l.style.display = (cliente.includes(filtro)||produtos.includes(filtro)) ? '' : 'none';
+    const codigo = l.cells[0].innerText.toLowerCase();
+    const cliente = l.cells[1].innerText.toLowerCase();
+    const produtos = l.cells[2].innerText.toLowerCase();
+    l.style.display = (codigo.includes(filtro) || cliente.includes(filtro) || produtos.includes(filtro)) ? '' : 'none';
   });
 }
 
