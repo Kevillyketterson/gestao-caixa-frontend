@@ -15,7 +15,6 @@ button { background: #2d89ef; color: #fff; border: none; cursor: pointer; border
 button:hover { background: #1b5fc4; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 th, td { border-bottom: 1px solid #ddd; padding: 8px; }
-.entrada { color: green; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
 </style>
@@ -87,12 +86,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <div class="card">
 <h2>💰 Caixa</h2>
 <h3>Saldo: R$ <span id="saldo">0.00</span></h3>
-<table>
-<thead><tr><th>Descrição</th><th>Valor</th></tr></thead>
-<tbody id="movTabela"></tbody>
-</table>
-</div>
-
 </div>
 
 <script>
@@ -107,23 +100,34 @@ let vendas = [];
 // CLIENTES
 // =======================
 async function fetchClientes(){
-  const res = await fetch(`${API_URL}/clientes`);
-  clientes = await res.json();
-  renderClientes();
+  try {
+    const res = await fetch(`${API_URL}/clientes`);
+    clientes = await res.json();
+    renderClientes();
+  } catch(e){
+    console.error('Erro ao buscar clientes:', e);
+  }
 }
 
 async function addCliente(){
   if(!clienteNome.value) return;
-  const res = await fetch(`${API_URL}/clientes`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nome: clienteNome.value})
-  });
-  if(res.ok){
-    clienteNome.value='';
-    await fetchClientes();
-  } else {
-    alert('Erro ao cadastrar cliente');
+  try {
+    const res = await fetch(`${API_URL}/clientes`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nome: clienteNome.value})
+    });
+    if(res.ok){
+      clienteNome.value='';
+      await fetchClientes();
+    } else {
+      const err = await res.json();
+      console.error('Erro do backend:', err);
+      alert('Erro ao cadastrar cliente');
+    }
+  } catch(e){
+    console.error('Falha na requisição:', e);
+    alert('Erro de rede ao cadastrar cliente');
   }
 }
 
@@ -148,29 +152,36 @@ function deleteCliente(id){
 // PRODUTOS
 // =======================
 async function fetchProdutos(){
-  const res = await fetch(`${API_URL}/produtos`);
-  const data = await res.json();
-  produtos = data.map(p=>({
-    id: p.id,
-    nome: p.nome,
-    valor: parseFloat(p.valor)
-  }));
-  renderProdutos();
+  try {
+    const res = await fetch(`${API_URL}/produtos`);
+    const data = await res.json();
+    produtos = data.map(p=>({id:p.id, nome:p.nome, valor:parseFloat(p.valor)}));
+    renderProdutos();
+  } catch(e){
+    console.error('Erro ao buscar produtos:', e);
+  }
 }
 
 async function addProduto(){
   if(!produtoNome.value || !produtoValor.value) return;
-  const res = await fetch(`${API_URL}/produtos`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nome: produtoNome.value, valor: parseFloat(produtoValor.value)})
-  });
-  if(res.ok){
-    produtoNome.value='';
-    produtoValor.value='';
-    await fetchProdutos();
-  } else {
-    alert('Erro ao cadastrar produto');
+  try {
+    const res = await fetch(`${API_URL}/produtos`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nome:produtoNome.value, valor:parseFloat(produtoValor.value)})
+    });
+    if(res.ok){
+      produtoNome.value='';
+      produtoValor.value='';
+      await fetchProdutos();
+    } else {
+      const err = await res.json();
+      console.error('Erro do backend:', err);
+      alert('Erro ao cadastrar produto');
+    }
+  } catch(e){
+    console.error('Falha na requisição:', e);
+    alert('Erro de rede ao cadastrar produto');
   }
 }
 
@@ -196,9 +207,13 @@ function deleteProduto(id){
 // VENDAS
 // =======================
 async function fetchVendas(){
-  const res = await fetch(`${API_URL}/vendas`);
-  vendas = await res.json();
-  renderVendas();
+  try {
+    const res = await fetch(`${API_URL}/vendas`);
+    vendas = await res.json();
+    renderVendas();
+  } catch(e){
+    console.error('Erro ao buscar vendas:', e);
+  }
 }
 
 function atualizarValorVenda(){
@@ -218,12 +233,12 @@ function calcularTotal(){
 
 async function registrarVenda(){
   const clienteId = parseInt(vendaCliente.value);
-  const cliente = clientes.find(c=>c.id===clienteId);
-
   const produtoId = parseInt(vendaProduto.value);
-  const p = produtos.find(pr=>pr.id===produtoId);
 
-  if(!cliente || !p) return alert('Selecione cliente e produto');
+  const cliente = clientes.find(c=>c.id===clienteId);
+  const produto = produtos.find(p=>p.id===produtoId);
+
+  if(!cliente || !produto) return alert('Selecione cliente e produto');
 
   const desconto = parseFloat(vendaDesconto.value)||0;
   const total = parseFloat(vendaTotal.value);
@@ -232,10 +247,10 @@ async function registrarVenda(){
     const res = await fetch(`${API_URL}/vendas`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
+      body:JSON.stringify({
         cliente: cliente.nome,
-        produto: p.nome,
-        valor: p.valor,
+        produto: produto.nome,
+        valor: produto.valor,
         desconto,
         total
       })
@@ -250,7 +265,7 @@ async function registrarVenda(){
     }
   } catch(e){
     console.error('Falha na requisição:', e);
-    alert('Erro ao registrar venda (falha de rede)');
+    alert('Erro de rede ao registrar venda');
   }
 }
 
@@ -261,7 +276,7 @@ function renderVendas(){
   vendasTabela.innerHTML='';
   let saldoTotal=0;
   vendas.forEach(v=>{
-    saldoTotal += v.total;
+    saldoTotal += parseFloat(v.total);
     vendasTabela.innerHTML += `<tr>
       <td>${v.cliente}</td>
       <td>${v.produto}</td>
