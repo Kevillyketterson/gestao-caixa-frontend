@@ -20,6 +20,10 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 .success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 .error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 </style>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </head>
 
 <body>
@@ -58,21 +62,18 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <div class="card">
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
-<select id="vendaProduto" onchange="atualizarValorProduto()"></select>
+<select id="vendaProduto"></select>
 <input id="vendaValor" readonly placeholder="Valor do produto">
-<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotalProduto()">
-<input id="vendaTotal" readonly placeholder="Total do produto">
-<button onclick="adicionarAoCarrinho()">Adicionar ao Carrinho</button>
+<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotalItem()">
+<button onclick="adicionarItem()">Adicionar ao Carrinho</button>
 
-<h3>Carrinho</h3>
+<h3>🛒 Carrinho</h3>
 <table>
-<thead>
-<tr><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th></th></tr>
-</thead>
+<thead><tr><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th></th></tr></thead>
 <tbody id="carrinhoTabela"></tbody>
 </table>
-<h3>Total da Venda: R$ <span id="totalVenda">0.00</span></h3>
-<button onclick="finalizarVenda()">Finalizar Venda</button>
+<h3>Total: R$ <span id="totalCarrinho">0.00</span></h3>
+<button onclick="finalizarVenda()">Finalizar Venda e Gerar Comprovante</button>
 </div>
 
 <!-- HISTÓRICO -->
@@ -100,6 +101,8 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <h3>Saldo: R$ <span id="saldo">0.00</span></h3>
 </div>
 
+</div>
+
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
 let clientes = [];
@@ -109,201 +112,264 @@ let carrinho = [];
 
 // =======================
 // MENSAGEM
-function showMessage(msg,type='success'){
+// =======================
+function showMessage(msg, type='success'){
   const div = document.getElementById('message');
-  div.innerHTML=`<div class="${type}">${msg}</div>`;
-  setTimeout(()=>{ div.innerHTML=''; },3000);
+  div.innerHTML = `<div class="${type}">${msg}</div>`;
+  setTimeout(()=>{ div.innerHTML=''; }, 3000);
 }
 
 // =======================
 // CLIENTES
+// =======================
 async function fetchClientes(){
   try {
     const res = await fetch(`${API_URL}/clientes`);
     clientes = await res.json();
     renderClientes();
-  } catch(e){ console.error(e); }
+  } catch(e){ console.error('Erro ao buscar clientes:', e); }
 }
+
 async function addCliente(){
   if(!clienteNome.value) return;
   try {
-    const res = await fetch(`${API_URL}/clientes`,{
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nome:clienteNome.value})
+    const res = await fetch(`${API_URL}/clientes`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nome: clienteNome.value})
     });
     if(res.ok){ clienteNome.value=''; await fetchClientes(); showMessage('Cliente cadastrado!'); }
     else showMessage('Erro ao cadastrar cliente','error');
-  } catch(e){ showMessage('Erro de rede','error'); }
+  } catch(e){ showMessage('Erro de rede ao cadastrar cliente','error'); }
 }
+
 async function deleteCliente(id){
-  if(!confirm('Deseja deletar este cliente?')) return;
-  try{
-    const res = await fetch(`${API_URL}/clientes/${id}`,{method:'DELETE'});
+  if(!confirm('Tem certeza que deseja deletar este cliente?')) return;
+  try {
+    const res = await fetch(`${API_URL}/clientes/${id}`, { method:'DELETE' });
     if(res.ok){ await fetchClientes(); showMessage('Cliente deletado!'); }
-  } catch(e){ showMessage('Erro de rede','error'); }
+    else showMessage('Erro ao deletar cliente','error');
+  } catch(e){ showMessage('Erro de rede ao deletar cliente','error'); }
 }
+
 function renderClientes(){
   clientesTabela.innerHTML='';
   vendaCliente.innerHTML='<option value="">Selecione o cliente</option>';
   clientes.forEach(c=>{
-    clientesTabela.innerHTML+=`<tr>
+    clientesTabela.innerHTML += `<tr>
       <td>${c.nome}</td>
       <td><button onclick="deleteCliente(${c.id})">❌</button></td>
     </tr>`;
-    vendaCliente.innerHTML+=`<option value="${c.id}">${c.nome}</option>`;
+    vendaCliente.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
   });
 }
 
 // =======================
 // PRODUTOS
+// =======================
 async function fetchProdutos(){
-  try{
+  try {
     const res = await fetch(`${API_URL}/produtos`);
     const data = await res.json();
-    produtos = data.map(p=>({id:p.id,nome:p.nome,valor:parseFloat(p.valor)}));
+    produtos = data.map(p=>({id:p.id, nome:p.nome, valor:parseFloat(p.valor)}));
     renderProdutos();
-  } catch(e){ console.error(e); }
+  } catch(e){ console.error('Erro ao buscar produtos:', e); }
 }
+
 async function addProduto(){
   if(!produtoNome.value || !produtoValor.value) return;
-  try{
-    const res = await fetch(`${API_URL}/produtos`,{
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nome:produtoNome.value,valor:parseFloat(produtoValor.value)})
+  try {
+    const res = await fetch(`${API_URL}/produtos`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nome:produtoNome.value, valor:parseFloat(produtoValor.value)})
     });
     if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); showMessage('Produto cadastrado!'); }
     else showMessage('Erro ao cadastrar produto','error');
-  } catch(e){ showMessage('Erro de rede','error'); }
+  } catch(e){ showMessage('Erro de rede ao cadastrar produto','error'); }
 }
+
 async function deleteProduto(id){
-  if(!confirm('Deseja deletar este produto?')) return;
-  try{
-    const res = await fetch(`${API_URL}/produtos/${id}`,{method:'DELETE'});
+  if(!confirm('Tem certeza que deseja deletar este produto?')) return;
+  try {
+    const res = await fetch(`${API_URL}/produtos/${id}`, { method:'DELETE' });
     if(res.ok){ await fetchProdutos(); showMessage('Produto deletado!'); }
-  } catch(e){ showMessage('Erro de rede','error'); }
+    else showMessage('Erro ao deletar produto','error');
+  } catch(e){ showMessage('Erro de rede ao deletar produto','error'); }
 }
+
 function renderProdutos(){
   produtosTabela.innerHTML='';
   vendaProduto.innerHTML='<option value="">Selecione o produto</option>';
   produtos.forEach(p=>{
-    produtosTabela.innerHTML+=`<tr>
+    produtosTabela.innerHTML += `<tr>
       <td>${p.nome}</td>
       <td>R$ ${p.valor.toFixed(2)}</td>
       <td><button onclick="deleteProduto(${p.id})">❌</button></td>
     </tr>`;
-    vendaProduto.innerHTML+=`<option value="${p.id}">${p.nome}</option>`;
+    vendaProduto.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
   });
 }
 
 // =======================
-// CARRINHO DE VENDAS
-function atualizarValorProduto(){
-  const p = produtos.find(pr=>pr.id===parseInt(vendaProduto.value));
-  vendaValor.value = p ? p.valor.toFixed(2) : '';
-  vendaDesconto.value='';
-  vendaTotal.value=vendaValor.value;
-}
-function calcularTotalProduto(){
-  const valor=parseFloat(vendaValor.value)||0;
-  let desconto=parseFloat(vendaDesconto.value)||0;
-  if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
-  vendaTotal.value=(valor-desconto).toFixed(2);
-}
-function adicionarAoCarrinho(){
+// VENDAS
+// =======================
+function atualizarValorVenda(){
   const produtoId = parseInt(vendaProduto.value);
   const p = produtos.find(pr=>pr.id===produtoId);
-  if(!p) return showMessage('Selecione um produto','error');
+  vendaValor.value = p ? p.valor.toFixed(2) : '';
+  vendaDesconto.value='';
+}
+
+function calcularTotalItem(){
+  const valor = parseFloat(vendaValor.value)||0;
+  let desconto = parseFloat(vendaDesconto.value)||0;
+  if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
+}
+
+function adicionarItem(){
+  const produtoId = parseInt(vendaProduto.value);
+  const produto = produtos.find(p=>p.id===produtoId);
   const desconto = parseFloat(vendaDesconto.value)||0;
-  const total = parseFloat(vendaTotal.value);
-  carrinho.push({id:p.id,nome:p.nome,valor:p.valor,desconto,total});
+  if(!produto) return showMessage('Selecione um produto','error');
+  const total = produto.valor - desconto;
+  carrinho.push({produto: produto.nome, valor: produto.valor, desconto, total});
   renderCarrinho();
 }
-function removerDoCarrinho(idx){
-  carrinho.splice(idx,1);
+
+function removerItemCarrinho(index){
+  carrinho.splice(index,1);
   renderCarrinho();
 }
+
 function renderCarrinho(){
-  carrinhoTabela.innerHTML='';
-  let totalVenda=0;
-  carrinho.forEach((item,idx)=>{
-    totalVenda+=item.total;
-    carrinhoTabela.innerHTML+=`<tr>
-      <td>${item.nome}</td>
+  const tbody = document.getElementById('carrinhoTabela');
+  tbody.innerHTML='';
+  let totalCarrinho = 0;
+  carrinho.forEach((item,i)=>{
+    totalCarrinho += item.total;
+    tbody.innerHTML += `<tr>
+      <td>${item.produto}</td>
       <td>R$ ${item.valor.toFixed(2)}</td>
       <td>R$ ${item.desconto.toFixed(2)}</td>
       <td>R$ ${item.total.toFixed(2)}</td>
-      <td><button onclick="removerDoCarrinho(${idx})">❌</button></td>
+      <td><button onclick="removerItemCarrinho(${i})">❌</button></td>
     </tr>`;
   });
-  document.getElementById('totalVenda').innerText = totalVenda.toFixed(2);
+  document.getElementById('totalCarrinho').innerText = totalCarrinho.toFixed(2);
+}
+
+async function finalizarVenda(){
+  const clienteId = parseInt(vendaCliente.value);
+  const cliente = clientes.find(c=>c.id===clienteId);
+  if(!cliente || carrinho.length===0) return showMessage('Selecione cliente e adicione produtos','error');
+
+  try {
+    const res = await fetch(`${API_URL}/vendas`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        cliente: cliente.nome,
+        itens: carrinho
+      })
+    });
+    if(res.ok){
+      gerarComprovantePDF({cliente: cliente.nome, itens: carrinho});
+      carrinho=[];
+      renderCarrinho();
+      vendaCliente.value='';
+      await fetchVendas();
+      showMessage('Venda finalizada com sucesso!');
+    } else showMessage('Erro ao finalizar venda','error');
+  } catch(e){ showMessage('Erro de rede ao finalizar venda','error'); }
 }
 
 // =======================
-// FINALIZAR VENDA
-async function finalizarVenda(){
-  const clienteId=parseInt(vendaCliente.value);
-  const cliente = clientes.find(c=>c.id===clienteId);
-  if(!cliente) return showMessage('Selecione um cliente','error');
-  if(carrinho.length===0) return showMessage('Carrinho vazio','error');
+// COMPROVANTE PDF
+// =======================
+function gerarComprovantePDF(venda) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Comprovante de Venda', 105, 20, {align:'center'});
+  doc.setFontSize(12);
+  doc.text(`Cliente: ${venda.cliente}`, 20, 40);
+  doc.text(`Data: ${new Date().toLocaleString()}`, 20, 50);
 
-  const vendaJSON={
-    cliente: cliente.nome,
-    itens: carrinho.map(item=>({
-      produto: item.nome,
-      valor: item.valor,
-      desconto: item.desconto,
-      total: item.total
-    }))
-  };
+  let startY = 70;
+  doc.text('Produto', 20, startY);
+  doc.text('Valor', 90, startY);
+  doc.text('Desconto', 130, startY);
+  doc.text('Total', 170, startY);
+  startY += 10;
 
-  try{
-    const res=await fetch(`${API_URL}/vendas`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(vendaJSON)
-    });
-    if(res.ok){
-      carrinho=[]; renderCarrinho();
-      vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
-      await fetchVendas();
-      showMessage('Venda finalizada com sucesso!');
-    } else { showMessage('Erro ao registrar venda','error'); }
-  } catch(e){ showMessage('Erro de rede ao registrar venda','error'); }
+  venda.itens.forEach(item=>{
+    doc.text(item.produto, 20, startY);
+    doc.text(`R$ ${item.valor.toFixed(2)}`, 90, startY);
+    doc.text(`R$ ${item.desconto.toFixed(2)}`, 130, startY);
+    doc.text(`R$ ${item.total.toFixed(2)}`, 170, startY);
+    startY+=10;
+  });
+
+  const totalGeral = venda.itens.reduce((s,i)=>s+i.total,0);
+  startY+=10;
+  doc.text(`TOTAL: R$ ${totalGeral.toFixed(2)}`, 130, startY);
+  doc.text('Obrigado pela sua compra!', 105, startY+20, {align:'center'});
+
+  doc.save(`comprovante_${venda.cliente}_${Date.now()}.pdf`);
 }
 
 // =======================
 // HISTÓRICO E CAIXA
-function fetchVendas(){
-  fetch(`${API_URL}/vendas`).then(r=>r.json()).then(data=>{ vendas=data; renderVendas(); });
+// =======================
+async function fetchVendas(){
+  try { 
+    const res = await fetch(`${API_URL}/vendas`);
+    vendas = await res.json();
+    renderVendas();
+  } catch(e){ console.error('Erro ao buscar vendas:', e); }
 }
+
 function renderVendas(){
   vendasTabela.innerHTML='';
-  let saldoTotal=0;
+  let saldoTotal = 0;
   vendas.forEach(v=>{
-    saldoTotal+=parseFloat(v.total);
-    vendasTabela.innerHTML+=`<tr>
-      <td>${v.cliente}</td>
-      <td>${v.produto||v.itens.map(i=>i.produto).join(', ')}</td>
-      <td>R$ ${parseFloat(v.valor||v.itens.reduce((s,i)=>s+i.valor,0)).toFixed(2)}</td>
-      <td>R$ ${parseFloat(v.desconto||v.itens.reduce((s,i)=>s+i.desconto,0)).toFixed(2)}</td>
-      <td>R$ ${parseFloat(v.total||v.itens.reduce((s,i)=>s+i.total,0)).toFixed(2)}</td>
-      <td>${new Date(v.data).toLocaleString()}</td>
-    </tr>`;
+    const itens = v.itens || [{produto: v.produto, valor: v.valor, desconto: v.desconto, total: v.total}];
+    let totalVenda = itens.reduce((s,i)=>s+i.total,0);
+    saldoTotal += totalVenda;
+    itens.forEach(item=>{
+      vendasTabela.innerHTML += `<tr>
+        <td>${v.cliente}</td>
+        <td>${item.produto}</td>
+        <td>R$ ${parseFloat(item.valor).toFixed(2)}</td>
+        <td>R$ ${parseFloat(item.desconto).toFixed(2)}</td>
+        <td>R$ ${parseFloat(item.total).toFixed(2)}</td>
+        <td>${new Date(v.data).toLocaleString()}</td>
+      </tr>`;
+    });
   });
-  document.getElementById('saldo').innerText=saldoTotal.toFixed(2);
+  document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
 }
+
 function filtrarVendas(){
   const filtro = searchVendas.value.toLowerCase();
-  Array.from(vendasTabela.getElementsByTagName('tr')).forEach(l=>{
-    const cliente=l.cells[0].innerText.toLowerCase();
-    const produto=l.cells[1].innerText.toLowerCase();
-    l.style.display=(cliente.includes(filtro)||produto.includes(filtro))?'':'none';
+  const linhas = vendasTabela.getElementsByTagName('tr');
+  Array.from(linhas).forEach(l=>{
+    const cliente = l.cells[0].innerText.toLowerCase();
+    const produto = l.cells[1].innerText.toLowerCase();
+    l.style.display = (cliente.includes(filtro)||produto.includes(filtro)) ? '' : 'none';
   });
 }
 
 // =======================
 // INIT
+// =======================
 function init(){
-  fetchClientes(); fetchProdutos(); fetchVendas();
+  fetchClientes();
+  fetchProdutos();
+  fetchVendas();
 }
+
 init();
 </script>
 </body>
