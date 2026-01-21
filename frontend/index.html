@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Gestão de Caixa</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
 .container { max-width: 1200px; margin: auto; }
@@ -19,13 +18,15 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
 .success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 .error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+.selected-product { display:flex; justify-content:space-between; margin:5px 0; padding:5px; background:#eef; border-radius:4px; }
+.selected-product span { font-weight:bold; }
+.selected-product button { background:#c00; color:#fff; border:none; border-radius:4px; padding:2px 6px; cursor:pointer; }
 </style>
 </head>
 
 <body>
 <div class="container">
 <h1>📊 Gestão de Caixa</h1>
-
 <div id="message"></div>
 
 <div class="grid">
@@ -60,18 +61,14 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
 <select id="vendaProduto"></select>
-
 <input id="vendaValor" readonly placeholder="Valor do produto">
-<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)">
-<button onclick="adicionarItemVenda()">Adicionar Produto</button>
+<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotal()">
+<button onclick="adicionarProdutoVenda()">Adicionar Produto</button>
 
-<h3>Itens da venda:</h3>
-<table>
-<thead><tr><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th></th></tr></thead>
-<tbody id="itensVendaTabela"></tbody>
-</table>
+<h3>Produtos selecionados:</h3>
+<div id="produtosSelecionados"></div>
 
-<h3>Total da venda: R$ <span id="totalVenda">0.00</span></h3>
+<h3>Total da venda: R$ <span id="vendaTotal">0.00</span></h3>
 <button onclick="registrarVenda()">Finalizar Venda</button>
 </div>
 
@@ -86,7 +83,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <th>Produtos</th>
 <th>Total</th>
 <th>Data</th>
-<th>Comprovante</th>
 </tr>
 </thead>
 <tbody id="vendasTabela"></tbody>
@@ -99,18 +95,16 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <h3>Saldo: R$ <span id="saldo">0.00</span></h3>
 </div>
 
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
 let clientes = [];
 let produtos = [];
 let vendas = [];
-let itensVenda = [];
+let vendaAtual = [];
 
 // =======================
-// MENSAGEM DE ALERTA
+// MENSAGEM
 // =======================
 function showMessage(msg, type='success'){
   const div = document.getElementById('message');
@@ -137,16 +131,13 @@ async function addCliente(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nome: clienteNome.value})
     });
-    if(res.ok){
-      clienteNome.value='';
-      await fetchClientes();
-      showMessage('Cliente cadastrado com sucesso!');
-    } else { showMessage('Erro ao cadastrar cliente','error'); }
+    if(res.ok){ clienteNome.value=''; await fetchClientes(); showMessage('Cliente cadastrado!'); }
+    else showMessage('Erro ao cadastrar cliente','error');
   } catch(e){ showMessage('Erro de rede ao cadastrar cliente','error'); }
 }
 
 async function deleteCliente(id){
-  if(!confirm('Tem certeza que deseja deletar este cliente?')) return;
+  if(!confirm('Deseja deletar este cliente?')) return;
   try {
     const res = await fetch(`${API_URL}/clientes/${id}`, { method:'DELETE' });
     if(res.ok){ await fetchClientes(); showMessage('Cliente deletado!'); }
@@ -186,16 +177,13 @@ async function addProduto(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nome:produtoNome.value, valor:parseFloat(produtoValor.value)})
     });
-    if(res.ok){
-      produtoNome.value=''; produtoValor.value='';
-      await fetchProdutos();
-      showMessage('Produto cadastrado com sucesso!');
-    } else { showMessage('Erro ao cadastrar produto','error'); }
+    if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); showMessage('Produto cadastrado!'); }
+    else showMessage('Erro ao cadastrar produto','error');
   } catch(e){ showMessage('Erro de rede ao cadastrar produto','error'); }
 }
 
 async function deleteProduto(id){
-  if(!confirm('Tem certeza que deseja deletar este produto?')) return;
+  if(!confirm('Deseja deletar este produto?')) return;
   try {
     const res = await fetch(`${API_URL}/produtos/${id}`, { method:'DELETE' });
     if(res.ok){ await fetchProdutos(); showMessage('Produto deletado!'); }
@@ -217,144 +205,112 @@ function renderProdutos(){
 }
 
 // =======================
-// VENDAS COM MULTI-ITENS
+// VENDAS MÚLTIPLAS
 // =======================
 function atualizarValorVenda(){
   const produtoId = parseInt(vendaProduto.value);
   const p = produtos.find(pr=>pr.id===produtoId);
   vendaValor.value = p ? p.valor.toFixed(2) : '';
-  vendaDesconto.value='';
 }
 
-function calcularTotalItem(){
-  const valor = parseFloat(vendaValor.value)||0;
-  let desconto = parseFloat(vendaDesconto.value)||0;
-  if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
-  return valor - desconto;
+function calcularTotalVendaAtual(){
+  const total = vendaAtual.reduce((s,i)=>s.total,s=0);
+  document.getElementById('vendaTotal').innerText = total.toFixed(2);
 }
 
-function adicionarItemVenda(){
+function adicionarProdutoVenda(){
   const produtoId = parseInt(vendaProduto.value);
+  const desconto = parseFloat(vendaDesconto.value)||0;
   const p = produtos.find(pr=>pr.id===produtoId);
   if(!p) return showMessage('Selecione um produto','error');
-
-  const desconto = parseFloat(vendaDesconto.value)||0;
-  const total = parseFloat((p.valor - desconto).toFixed(2));
-
-  itensVenda.push({ produto: p.nome, valor: p.valor, desconto, total });
-  renderItensVenda();
-  vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value='';
+  let total = p.valor - desconto;
+  if(total<0) total=0;
+  vendaAtual.push({produto:p.nome, valor:p.valor, desconto, total});
+  renderProdutosSelecionados();
+  vendaDesconto.value='';
+  vendaValor.value='';
 }
 
-function removerItemVenda(index){
-  itensVenda.splice(index,1);
-  renderItensVenda();
+function removerProdutoVenda(index){
+  vendaAtual.splice(index,1);
+  renderProdutosSelecionados();
 }
 
-function renderItensVenda(){
-  const tbody = document.getElementById('itensVendaTabela');
-  tbody.innerHTML='';
-  let totalVenda=0;
-  itensVenda.forEach((item,index)=>{
-    totalVenda+=item.total;
-    tbody.innerHTML += `<tr>
-      <td>${item.produto}</td>
-      <td>R$ ${item.valor.toFixed(2)}</td>
-      <td>R$ ${item.desconto.toFixed(2)}</td>
-      <td>R$ ${item.total.toFixed(2)}</td>
-      <td><button onclick="removerItemVenda(${index})">❌</button></td>
-    </tr>`;
+function renderProdutosSelecionados(){
+  const div = document.getElementById('produtosSelecionados');
+  div.innerHTML='';
+  vendaAtual.forEach((item,i)=>{
+    const el = document.createElement('div');
+    el.className='selected-product';
+    el.innerHTML=`<span>${item.produto} - R$ ${item.total.toFixed(2)}</span>
+                  <button onclick="removerProdutoVenda(${i})">❌</button>`;
+    div.appendChild(el);
   });
-  document.getElementById('totalVenda').innerText = totalVenda.toFixed(2);
+  calcularTotalVendaAtual();
 }
 
+// =======================
+// REGISTRAR VENDA E GERAR COMPROVANTE
+// =======================
 async function registrarVenda(){
   const clienteId = parseInt(vendaCliente.value);
   const cliente = clientes.find(c=>c.id===clienteId);
-  if(!cliente || itensVenda.length===0) return showMessage('Selecione cliente e adicione produtos','error');
-
-  const vendaParaEnviar = {
-    cliente: cliente.nome,
-    itens: itensVenda
-  };
+  if(!cliente) return showMessage('Selecione um cliente','error');
+  if(vendaAtual.length===0) return showMessage('Adicione pelo menos 1 produto','error');
 
   try {
     const res = await fetch(`${API_URL}/vendas`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(vendaParaEnviar)
+      body: JSON.stringify({cliente: cliente.nome, itens: vendaAtual})
     });
     if(res.ok){
-      itensVenda = [];
-      vendaCliente.value='';
-      renderItensVenda();
-      await fetchVendas();
+      vendaAtual=[]; renderProdutosSelecionados(); vendaCliente.value='';
+      fetchVendas();
       showMessage('Venda registrada com sucesso!');
-      gerarComprovantePDF(vendaParaEnviar);
+      gerarComprovantePDF({cliente:cliente.nome, itens:res.itens||vendaAtual});
     } else showMessage('Erro ao registrar venda','error');
   } catch(e){ showMessage('Erro de rede ao registrar venda','error'); }
 }
 
 // =======================
-// HISTÓRICO E CAIXA
+// COMPROVANTE
 // =======================
-function renderVendas(){
-  vendasTabela.innerHTML='';
-  let saldoTotal=0;
-  vendas.forEach(v=>{
-    saldoTotal += v.itens.reduce((s,i)=>s+i.total,0);
-    const produtosStr = v.itens.map(i=>i.produto).join(', ');
-    vendasTabela.innerHTML += `<tr>
-      <td>${v.cliente}</td>
-      <td>${produtosStr}</td>
-      <td>R$ ${v.itens.reduce((s,i)=>s+i.total,0).toFixed(2)}</td>
-      <td>${new Date(v.data).toLocaleString()}</td>
-      <td><button onclick='gerarComprovantePDF(${JSON.stringify(v)})'>📄</button></td>
-    </tr>`;
-  });
-  document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
-}
-
-function filtrarVendas(){
-  const filtro = searchVendas.value.toLowerCase();
-  const linhas = vendasTabela.getElementsByTagName('tr');
-  Array.from(linhas).forEach(l=>{
-    const cliente = l.cells[0].innerText.toLowerCase();
-    const produtos = l.cells[1].innerText.toLowerCase();
-    l.style.display = (cliente.includes(filtro)||produtos.includes(filtro)) ? '' : 'none';
-  });
-}
-
-// =======================
-// COMPROVANTE COM CÓDIGO
-// =======================
-function gerarComprovantePDF(venda) {
+function gerarComprovantePDF(venda){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
-  const codigoVenda = Math.floor(100000 + Math.random() * 900000);
+  const codigoVenda = Math.floor(100000 + Math.random()*900000);
 
+  // Título
   doc.setFontSize(16);
   doc.text('Comprovante de Venda', 105, 20, {align:'center'});
 
-  // Código da venda em retângulo
+  // Retângulo código
+  const rectWidth = 50;
+  const rectHeight = 15;
+  const rectX = (doc.internal.pageSize.getWidth() - rectWidth)/2;
+  const rectY = 30;
   doc.setDrawColor(0);
-  doc.setFillColor(200, 200, 255);
-  doc.rect(150, 30, 40, 15, 'F');
+  doc.setFillColor(200,200,255);
+  doc.rect(rectX, rectY, rectWidth, rectHeight,'F');
+
+  // Número dentro do retângulo
   doc.setTextColor(0);
-  doc.setFontSize(12);
-  doc.text(`#${codigoVenda}`, 170, 40, {align:'center'});
+  doc.setFontSize(14);
+  doc.text(`#${codigoVenda}`, doc.internal.pageSize.getWidth()/2, rectY+rectHeight/1.5, {align:'center'});
 
+  // Dados
   doc.setFontSize(12);
-  doc.text(`Cliente: ${venda.cliente}`, 20, 50);
-  doc.text(`Data: ${new Date().toLocaleString()}`, 20, 60);
+  doc.text(`Cliente: ${venda.cliente}`, 20, 60);
+  doc.text(`Data: ${new Date().toLocaleString()}`, 20, 70);
 
-  let startY = 80;
+  let startY = 90;
   doc.text('Produto', 20, startY);
   doc.text('Valor', 90, startY);
   doc.text('Desconto', 130, startY);
   doc.text('Total', 170, startY);
-  startY += 10;
+  startY+=10;
 
   venda.itens.forEach(item=>{
     doc.text(item.produto, 20, startY);
@@ -373,12 +329,51 @@ function gerarComprovantePDF(venda) {
 }
 
 // =======================
+// HISTÓRICO E CAIXA
+// =======================
+async function fetchVendas(){
+  try {
+    const res = await fetch(`${API_URL}/vendas`);
+    vendas = await res.json();
+    renderVendas();
+  } catch(e){ console.error('Erro ao buscar vendas:', e); }
+}
+
+function renderVendas(){
+  vendasTabela.innerHTML='';
+  let saldoTotal=0;
+  vendas.forEach(v=>{
+    const produtosStr = v.itens.map(i=>`${i.produto} (R$ ${i.total.toFixed(2)})`).join(', ');
+    const totalVenda = v.itens.reduce((s,i)=>s+i.total,0);
+    saldoTotal += totalVenda;
+    vendasTabela.innerHTML += `<tr>
+      <td>${v.cliente}</td>
+      <td>${produtosStr}</td>
+      <td>R$ ${totalVenda.toFixed(2)}</td>
+      <td>${new Date(v.data).toLocaleString()}</td>
+    </tr>`;
+  });
+  document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
+}
+
+function filtrarVendas(){
+  const filtro = searchVendas.value.toLowerCase();
+  const linhas = vendasTabela.getElementsByTagName('tr');
+  Array.from(linhas).forEach(l=>{
+    const cliente = l.cells[0].innerText.toLowerCase();
+    const produtos = l.cells[1].innerText.toLowerCase();
+    l.style.display = (cliente.includes(filtro)||produtos.includes(filtro)) ? '' : 'none';
+  });
+}
+
+// =======================
 // INIT
 // =======================
 function init(){
   fetchClientes();
   fetchProdutos();
   fetchVendas();
+  vendaProduto.addEventListener('change', atualizarValorVenda);
 }
 
 init();
