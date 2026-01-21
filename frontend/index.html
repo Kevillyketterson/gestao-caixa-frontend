@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Gestão de Caixa</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
 body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
 .container { max-width: 1200px; margin: auto; }
@@ -56,9 +57,11 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
 <select id="vendaProduto" onchange="atualizarValorVenda()"></select>
+
 <input id="vendaValor" readonly placeholder="Valor do produto">
 <input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotal()">
 <input id="vendaTotal" readonly placeholder="Total da venda">
+
 <button onclick="registrarVenda()">Confirmar Venda</button>
 </div>
 
@@ -66,7 +69,16 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <div class="card">
 <h2>📜 Histórico de Vendas</h2>
 <table>
-<thead><tr><th>Cliente</th><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th>Data</th></tr></thead>
+<thead>
+<tr>
+<th>Cliente</th>
+<th>Produto</th>
+<th>Valor</th>
+<th>Desconto</th>
+<th>Total</th>
+<th>Data</th>
+</tr>
+</thead>
 <tbody id="vendasTabela"></tbody>
 </table>
 </div>
@@ -81,156 +93,183 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 </table>
 </div>
 
-<script>
-const API_URL = 'https://gestao-caixa-backend.onrender.com'; // ou localhost:10000 para dev
+</div>
 
+<script>
+const API_URL = 'https://gestao-caixa-backend.onrender.com';
+
+// Estado
 let clientes = [];
 let produtos = [];
 let vendas = [];
 
 // =======================
-// FETCH
-// =======================
-async function fetchClientes(){
-  try {
-    const res = await fetch(`${API_URL}/clientes`);
-    if(!res.ok) throw new Error('Erro ao buscar clientes');
-    clientes = await res.json();
-    renderClientes();
-  } catch(err){ console.error(err); alert('Erro ao carregar clientes'); }
-}
-
-async function fetchProdutos(){
-  try {
-    const res = await fetch(`${API_URL}/produtos`);
-    if(!res.ok) throw new Error('Erro ao buscar produtos');
-    produtos = await res.json();
-    renderProdutos();
-  } catch(err){ console.error(err); alert('Erro ao carregar produtos'); }
-}
-
-async function fetchVendas(){
-  try {
-    const res = await fetch(`${API_URL}/vendas`);
-    if(!res.ok) throw new Error('Erro ao buscar vendas');
-    vendas = await res.json();
-    renderVendas();
-  } catch(err){ console.error(err); alert('Erro ao carregar vendas'); }
-}
-
-// =======================
 // CLIENTES
 // =======================
+async function fetchClientes(){
+  const res = await fetch(`${API_URL}/clientes`);
+  clientes = await res.json();
+  renderClientes();
+}
+
 async function addCliente(){
   if(!clienteNome.value) return;
   const res = await fetch(`${API_URL}/clientes`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({nome: clienteNome.value})
   });
-  if(res.ok){ clienteNome.value=''; await fetchClientes(); }
-  else alert('Erro ao cadastrar cliente');
+  if(res.ok){
+    clienteNome.value='';
+    await fetchClientes();
+  } else {
+    alert('Erro ao cadastrar cliente');
+  }
 }
 
 function renderClientes(){
-  const table = document.getElementById('clientesTabela');
-  const select = document.getElementById('vendaCliente');
-  table.innerHTML = '';
-  select.innerHTML = '<option value="">Selecione o cliente</option>';
+  clientesTabela.innerHTML='';
+  vendaCliente.innerHTML='<option value="">Selecione o cliente</option>';
   clientes.forEach(c=>{
-    table.innerHTML += `<tr><td>${c.nome}</td><td>❌</td></tr>`;
-    select.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
+    clientesTabela.innerHTML += `<tr>
+      <td>${c.nome}</td>
+      <td><button onclick="deleteCliente(${c.id})">❌</button></td>
+    </tr>`;
+    vendaCliente.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
   });
+}
+
+function deleteCliente(id){
+  clientes = clientes.filter(c=>c.id!==id);
+  renderClientes();
 }
 
 // =======================
 // PRODUTOS
 // =======================
+async function fetchProdutos(){
+  const res = await fetch(`${API_URL}/produtos`);
+  const data = await res.json();
+  produtos = data.map(p=>({
+    id: p.id,
+    nome: p.nome,
+    valor: parseFloat(p.valor)
+  }));
+  renderProdutos();
+}
+
 async function addProduto(){
   if(!produtoNome.value || !produtoValor.value) return;
   const res = await fetch(`${API_URL}/produtos`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome: produtoNome.value, valor: +produtoValor.value})
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome: produtoNome.value, valor: parseFloat(produtoValor.value)})
   });
-  if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); }
-  else alert('Erro ao cadastrar produto');
+  if(res.ok){
+    produtoNome.value='';
+    produtoValor.value='';
+    await fetchProdutos();
+  } else {
+    alert('Erro ao cadastrar produto');
+  }
 }
 
 function renderProdutos(){
-  const table = document.getElementById('produtosTabela');
-  const select = document.getElementById('vendaProduto');
-  table.innerHTML = '';
-  select.innerHTML = '<option value="">Selecione o produto</option>';
+  produtosTabela.innerHTML='';
+  vendaProduto.innerHTML='<option value="">Selecione o produto</option>';
   produtos.forEach(p=>{
-    table.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td>❌</td></tr>`;
-    select.innerHTML += `<option value="${p.nome}" data-valor="${p.valor}">${p.nome}</option>`;
+    produtosTabela.innerHTML += `<tr>
+      <td>${p.nome}</td>
+      <td>R$ ${p.valor.toFixed(2)}</td>
+      <td><button onclick="deleteProduto(${p.id})">❌</button></td>
+    </tr>`;
+    vendaProduto.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
   });
+}
+
+function deleteProduto(id){
+  produtos = produtos.filter(p=>p.id!==id);
+  renderProdutos();
 }
 
 // =======================
 // VENDAS
 // =======================
+async function fetchVendas(){
+  const res = await fetch(`${API_URL}/vendas`);
+  vendas = await res.json();
+  renderVendas();
+}
+
 function atualizarValorVenda(){
-  const sel = document.getElementById('vendaProduto');
-  const valor = sel.selectedOptions[0]?.dataset?.valor || 0;
-  vendaValor.value = parseFloat(valor).toFixed(2);
-  vendaDesconto.value = '';
-  vendaTotal.value = vendaValor.value;
+  const produtoId = parseInt(vendaProduto.value);
+  const p = produtos.find(pr=>pr.id===produtoId);
+  vendaValor.value = p ? p.valor.toFixed(2) : '';
+  vendaDesconto.value='';
+  vendaTotal.value=vendaValor.value;
 }
 
 function calcularTotal(){
   const valor = parseFloat(vendaValor.value)||0;
   let desconto = parseFloat(vendaDesconto.value)||0;
   if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
-  vendaTotal.value = (valor-desconto).toFixed(2);
+  vendaTotal.value=(valor-desconto).toFixed(2);
 }
 
 async function registrarVenda(){
-  const cliente = document.getElementById('vendaCliente').value;
-  const produto = document.getElementById('vendaProduto').value;
-  const valor = parseFloat(vendaValor.value);
+  const clienteId = parseInt(vendaCliente.value);
+  const cliente = clientes.find(c=>c.id===clienteId);
+
+  const produtoId = parseInt(vendaProduto.value);
+  const p = produtos.find(pr=>pr.id===produtoId);
+
+  if(!cliente || !p) return alert('Selecione cliente e produto');
+
   const desconto = parseFloat(vendaDesconto.value)||0;
   const total = parseFloat(vendaTotal.value);
 
-  if(!cliente || !produto) return alert('Selecione cliente e produto');
-
-  const res = await fetch(`${API_URL}/vendas`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({cliente, produto, valor, desconto, total})
-  });
-
-  if(res.ok){
-    document.getElementById('vendaCliente').value='';
-    document.getElementById('vendaProduto').value='';
-    vendaValor.value='';
-    vendaDesconto.value='';
-    vendaTotal.value='';
-    await fetchVendas();
-  } else alert('Erro ao registrar venda');
+  try {
+    const res = await fetch(`${API_URL}/vendas`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        cliente: cliente.nome,
+        produto: p.nome,
+        valor: p.valor,
+        desconto,
+        total
+      })
+    });
+    if(res.ok){
+      vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
+      await fetchVendas();
+    } else {
+      const err = await res.json();
+      console.error('Erro do backend:', err);
+      alert('Erro ao registrar venda');
+    }
+  } catch(e){
+    console.error('Falha na requisição:', e);
+    alert('Erro ao registrar venda (falha de rede)');
+  }
 }
 
 // =======================
 // HISTÓRICO E CAIXA
 // =======================
 function renderVendas(){
-  const table = document.getElementById('vendasTabela');
-  const mov = document.getElementById('movTabela');
-  table.innerHTML = '';
-  mov.innerHTML = '';
-  let saldoTotal = 0;
+  vendasTabela.innerHTML='';
+  let saldoTotal=0;
   vendas.forEach(v=>{
     saldoTotal += v.total;
-    table.innerHTML += `<tr>
+    vendasTabela.innerHTML += `<tr>
       <td>${v.cliente}</td>
       <td>${v.produto}</td>
-      <td>R$ ${v.valor.toFixed(2)}</td>
-      <td>R$ ${v.desconto.toFixed(2)}</td>
-      <td>R$ ${v.total.toFixed(2)}</td>
+      <td>R$ ${parseFloat(v.valor).toFixed(2)}</td>
+      <td>R$ ${parseFloat(v.desconto).toFixed(2)}</td>
+      <td>R$ ${parseFloat(v.total).toFixed(2)}</td>
       <td>${new Date(v.data).toLocaleString()}</td>
     </tr>`;
-    mov.innerHTML += `<tr><td>Venda - ${v.produto}</td><td class="entrada">R$ ${v.total.toFixed(2)}</td></tr>`;
   });
   document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
 }
@@ -238,10 +277,10 @@ function renderVendas(){
 // =======================
 // INIT
 // =======================
-async function init(){
-  await fetchClientes();
-  await fetchProdutos();
-  await fetchVendas();
+function init(){
+  fetchClientes();
+  fetchProdutos();
+  fetchVendas();
 }
 
 init();
