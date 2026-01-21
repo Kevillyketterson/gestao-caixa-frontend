@@ -143,9 +143,21 @@ function renderClientes(){
   });
 }
 
-function deleteCliente(id){
-  clientes = clientes.filter(c=>c.id!==id);
-  renderClientes();
+async function deleteCliente(id){
+  try {
+    const res = await fetch(`${API_URL}/clientes/${id}`, { method: 'DELETE' });
+    if(res.ok){
+      clientes = clientes.filter(c => c.id !== id);
+      renderClientes();
+    } else {
+      const err = await res.json();
+      console.error('Erro ao deletar cliente:', err);
+      alert('Erro ao deletar cliente');
+    }
+  } catch(e){
+    console.error('Erro de rede ao deletar cliente:', e);
+    alert('Erro ao deletar cliente');
+  }
 }
 
 // =======================
@@ -198,9 +210,21 @@ function renderProdutos(){
   });
 }
 
-function deleteProduto(id){
-  produtos = produtos.filter(p=>p.id!==id);
-  renderProdutos();
+async function deleteProduto(id){
+  try {
+    const res = await fetch(`${API_URL}/produtos/${id}`, { method: 'DELETE' });
+    if(res.ok){
+      produtos = produtos.filter(p => p.id !== id);
+      renderProdutos();
+    } else {
+      const err = await res.json();
+      console.error('Erro ao deletar produto:', err);
+      alert('Erro ao deletar produto');
+    }
+  } catch(e){
+    console.error('Erro de rede ao deletar produto:', e);
+    alert('Erro ao deletar produto');
+  }
 }
 
 // =======================
@@ -247,7 +271,7 @@ async function registrarVenda(){
     const res = await fetch(`${API_URL}/vendas`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
+      body: JSON.stringify({
         cliente: cliente.nome,
         produto: produto.nome,
         valor: produto.valor,
