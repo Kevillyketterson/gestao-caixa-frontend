@@ -25,43 +25,38 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <h1>📊 Gestão de Caixa</h1>
 
 <div class="grid">
+  <!-- CLIENTES -->
+  <div class="card">
+    <h2>👤 Clientes</h2>
+    <input id="clienteNome" placeholder="Nome do cliente">
+    <button onclick="addCliente()">Cadastrar</button>
+    <table>
+      <thead><tr><th>Nome</th><th></th></tr></thead>
+      <tbody id="clientesTabela"></tbody>
+    </table>
+  </div>
 
-<!-- CLIENTES -->
-<div class="card">
-<h2>👤 Clientes</h2>
-<input id="clienteNome" placeholder="Nome do cliente">
-<button onclick="addCliente()">Cadastrar</button>
-<table>
-<thead><tr><th>Nome</th><th></th></tr></thead>
-<tbody id="clientesTabela"></tbody>
-</table>
-</div>
-
-<!-- PRODUTOS -->
-<div class="card">
-<h2>📦 Produtos</h2>
-<input id="produtoNome" placeholder="Nome do produto">
-<input id="produtoValor" type="number" step="0.01" placeholder="Valor">
-<button onclick="addProduto()">Cadastrar</button>
-<table>
-<thead><tr><th>Produto</th><th>Valor</th><th></th></tr></thead>
-<tbody id="produtosTabela"></tbody>
-</table>
-</div>
-
+  <!-- PRODUTOS -->
+  <div class="card">
+    <h2>📦 Produtos</h2>
+    <input id="produtoNome" placeholder="Nome do produto">
+    <input id="produtoValor" type="number" step="0.01" placeholder="Valor">
+    <button onclick="addProduto()">Cadastrar</button>
+    <table>
+      <thead><tr><th>Produto</th><th>Valor</th><th></th></tr></thead>
+      <tbody id="produtosTabela"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- VENDA -->
 <div class="card">
 <h2>🧾 Nova Venda</h2>
-
 <select id="vendaCliente"></select>
 <select id="vendaProduto" onchange="atualizarValorVenda()"></select>
-
 <input id="vendaValor" readonly placeholder="Valor do produto">
 <input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotal()">
 <input id="vendaTotal" readonly placeholder="Total da venda">
-
 <button onclick="registrarVenda()">Confirmar Venda</button>
 </div>
 
@@ -70,14 +65,7 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <h2>📜 Histórico de Vendas</h2>
 <table>
 <thead>
-<tr>
-<th>Cliente</th>
-<th>Produto</th>
-<th>Valor</th>
-<th>Desconto</th>
-<th>Total</th>
-<th>Data</th>
-</tr>
+<tr><th>Cliente</th><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th>Data</th></tr>
 </thead>
 <tbody id="vendasTabela"></tbody>
 </table>
@@ -103,61 +91,64 @@ let vendas = [];
 // =======================
 // CLIENTES
 // =======================
-async function fetchClientes(){
+async function fetchClientes() {
   const res = await fetch(`${API_URL}/clientes`);
   clientes = await res.json();
   renderClientes();
 }
 
-async function addCliente(){
-  if(!clienteNome.value) return;
+async function addCliente() {
+  const nome = document.getElementById('clienteNome').value.trim();
+  if (!nome) return;
   const res = await fetch(`${API_URL}/clientes`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome: clienteNome.value})
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome})
   });
-  if(res.ok){ clienteNome.value=''; await fetchClientes(); }
+  if(res.ok){ document.getElementById('clienteNome').value=''; await fetchClientes(); }
   else alert('Erro ao cadastrar cliente');
 }
 
-function renderClientes(){
+function renderClientes() {
   const tabela = document.getElementById('clientesTabela');
   const select = document.getElementById('vendaCliente');
   tabela.innerHTML = '';
   select.innerHTML = '<option value="">Selecione o cliente</option>';
-  clientes.forEach(c=>{
-    tabela.innerHTML += `<tr><td>${c.nome}</td><td></td></tr>`;
-    select.innerHTML += `<option>${c.nome}">${c.nome}</option>`;
+  clientes.forEach(c => {
+    tabela.innerHTML += `<tr><td>${c.nome}</td></tr>`;
+    select.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
   });
 }
 
 // =======================
 // PRODUTOS
 // =======================
-async function fetchProdutos(){
+async function fetchProdutos() {
   const res = await fetch(`${API_URL}/produtos`);
   produtos = await res.json();
   renderProdutos();
 }
 
-async function addProduto(){
-  if(!produtoNome.value || !produtoValor.value) return;
+async function addProduto() {
+  const nome = document.getElementById('produtoNome').value.trim();
+  const valor = parseFloat(document.getElementById('produtoValor').value);
+  if (!nome || isNaN(valor)) return;
   const res = await fetch(`${API_URL}/produtos`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome: produtoNome.value, valor:+produtoValor.value})
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome, valor})
   });
-  if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); }
+  if(res.ok){ document.getElementById('produtoNome').value=''; document.getElementById('produtoValor').value=''; await fetchProdutos(); }
   else alert('Erro ao cadastrar produto');
 }
 
-function renderProdutos(){
+function renderProdutos() {
   const tabela = document.getElementById('produtosTabela');
   const select = document.getElementById('vendaProduto');
   tabela.innerHTML = '';
   select.innerHTML = '<option value="">Selecione o produto</option>';
-  produtos.forEach(p=>{
-    tabela.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td></td></tr>`;
+  produtos.forEach(p => {
+    tabela.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td></tr>`;
     select.innerHTML += `<option value="${p.nome}">${p.nome}</option>`;
   });
 }
@@ -165,33 +156,33 @@ function renderProdutos(){
 // =======================
 // VENDA
 // =======================
-function atualizarValorVenda(){
-  const prodNome = document.getElementById('vendaProduto').value;
-  const produto = produtos.find(p => p.nome === prodNome);
+function atualizarValorVenda() {
+  const nomeProduto = document.getElementById('vendaProduto').value;
+  const produto = produtos.find(p => p.nome === nomeProduto);
   document.getElementById('vendaValor').value = produto ? produto.valor.toFixed(2) : '';
   document.getElementById('vendaDesconto').value = '';
   document.getElementById('vendaTotal').value = produto ? produto.valor.toFixed(2) : '';
 }
 
-function calcularTotal(){
-  const valor = parseFloat(document.getElementById('vendaValor').value)||0;
-  let desconto = parseFloat(document.getElementById('vendaDesconto').value)||0;
-  if(desconto>valor){ desconto=valor; document.getElementById('vendaDesconto').value=valor.toFixed(2);}
-  document.getElementById('vendaTotal').value=(valor-desconto).toFixed(2);
+function calcularTotal() {
+  const valor = parseFloat(document.getElementById('vendaValor').value) || 0;
+  let desconto = parseFloat(document.getElementById('vendaDesconto').value) || 0;
+  if (desconto > valor) desconto = valor;
+  document.getElementById('vendaTotal').value = (valor - desconto).toFixed(2);
 }
 
-async function registrarVenda(){
+async function registrarVenda() {
   const cliente = document.getElementById('vendaCliente').value;
   const produtoNome = document.getElementById('vendaProduto').value;
-  const produto = produtos.find(p=>p.nome===produtoNome);
-  const desconto = parseFloat(document.getElementById('vendaDesconto').value)||0;
-  const total = parseFloat(document.getElementById('vendaTotal').value)||0;
+  const produto = produtos.find(p => p.nome === produtoNome);
+  const desconto = parseFloat(document.getElementById('vendaDesconto').value) || 0;
+  const total = parseFloat(document.getElementById('vendaTotal').value) || 0;
 
   if(!cliente || !produto) return alert('Selecione cliente e produto');
 
   const res = await fetch(`${API_URL}/vendas`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       cliente,
       produto: produto.nome,
@@ -212,15 +203,15 @@ async function registrarVenda(){
 }
 
 // =======================
-// VENDAS E CAIXA
+// VENDAS
 // =======================
-async function fetchVendas(){
+async function fetchVendas() {
   const res = await fetch(`${API_URL}/vendas`);
   vendas = await res.json();
   renderVendas();
 }
 
-function renderVendas(){
+function renderVendas() {
   const tabela = document.getElementById('vendasTabela');
   const movTabela = document.getElementById('movTabela');
   tabela.innerHTML=''; movTabela.innerHTML='';
@@ -242,7 +233,7 @@ function renderVendas(){
 // =======================
 // INIT
 // =======================
-async function init(){
+async function init() {
   await fetchClientes();
   await fetchProdutos();
   await fetchVendas();
