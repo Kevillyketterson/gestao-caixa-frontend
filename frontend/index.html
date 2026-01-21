@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Gestão de Caixa</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
 .container { max-width: 1200px; margin: auto; }
@@ -20,13 +19,11 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
 </style>
 </head>
-
 <body>
 <div class="container">
 <h1>📊 Gestão de Caixa</h1>
 
 <div class="grid">
-<!-- CLIENTES -->
 <div class="card">
 <h2>👤 Clientes</h2>
 <input id="clienteNome" placeholder="Nome do cliente">
@@ -37,7 +34,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 </table>
 </div>
 
-<!-- PRODUTOS -->
 <div class="card">
 <h2>📦 Produtos</h2>
 <input id="produtoNome" placeholder="Nome do produto">
@@ -50,7 +46,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 </div>
 </div>
 
-<!-- VENDA -->
 <div class="card">
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
@@ -61,7 +56,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <button onclick="registrarVenda()">Confirmar Venda</button>
 </div>
 
-<!-- HISTÓRICO -->
 <div class="card">
 <h2>📜 Histórico de Vendas</h2>
 <table>
@@ -79,7 +73,6 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 </table>
 </div>
 
-<!-- CAIXA -->
 <div class="card">
 <h2>💰 Caixa</h2>
 <h3>Saldo: R$ <span id="saldo">0.00</span></h3>
@@ -94,7 +87,7 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
 
-// DOM elements
+// DOM
 const clientesTabela = document.getElementById('clientesTabela');
 const vendaCliente = document.getElementById('vendaCliente');
 const produtosTabela = document.getElementById('produtosTabela');
@@ -105,7 +98,6 @@ const vendaTotal = document.getElementById('vendaTotal');
 const vendasTabela = document.getElementById('vendasTabela');
 const saldoElem = document.getElementById('saldo');
 
-// State
 let clientes = [];
 let produtos = [];
 let vendas = [];
@@ -116,27 +108,24 @@ let vendas = [];
 async function fetchClientes(){
   const res = await fetch(`${API_URL}/clientes`);
   clientes = await res.json();
-  renderClientes();
+  clientesTabela.innerHTML = '';
+  vendaCliente.innerHTML = '<option value="">Selecione o cliente</option>';
+  clientes.forEach(c=>{
+    clientesTabela.innerHTML += `<tr><td>${c.nome}</td><td></td></tr>`;
+    vendaCliente.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
+  });
 }
 
 async function addCliente(){
-  if(!document.getElementById('clienteNome').value) return;
+  const nome = document.getElementById('clienteNome').value.trim();
+  if(!nome) return;
   const res = await fetch(`${API_URL}/clientes`, {
-    method: 'POST',
+    method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome: document.getElementById('clienteNome').value})
+    body: JSON.stringify({nome})
   });
   if(res.ok){ document.getElementById('clienteNome').value=''; await fetchClientes(); }
   else alert('Erro ao cadastrar cliente');
-}
-
-function renderClientes(){
-  clientesTabela.innerHTML='';
-  vendaCliente.innerHTML='<option value="">Selecione o cliente</option>';
-  clientes.forEach(c=>{
-    clientesTabela.innerHTML+=`<tr><td>${c.nome}</td><td></td></tr>`;
-    vendaCliente.innerHTML+=`<option value="${c.nome}">${c.nome}</option>`;
-  });
 }
 
 // =======================
@@ -145,11 +134,16 @@ function renderClientes(){
 async function fetchProdutos(){
   const res = await fetch(`${API_URL}/produtos`);
   produtos = await res.json();
-  renderProdutos();
+  produtosTabela.innerHTML = '';
+  vendaProduto.innerHTML = '<option value="">Selecione o produto</option>';
+  produtos.forEach(p=>{
+    produtosTabela.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td></td></tr>`;
+    vendaProduto.innerHTML += `<option value="${p.nome}">${p.nome}</option>`;
+  });
 }
 
 async function addProduto(){
-  const nome = document.getElementById('produtoNome').value;
+  const nome = document.getElementById('produtoNome').value.trim();
   const valor = parseFloat(document.getElementById('produtoValor').value);
   if(!nome || !valor) return;
   const res = await fetch(`${API_URL}/produtos`, {
@@ -159,15 +153,6 @@ async function addProduto(){
   });
   if(res.ok){ document.getElementById('produtoNome').value=''; document.getElementById('produtoValor').value=''; await fetchProdutos(); }
   else alert('Erro ao cadastrar produto');
-}
-
-function renderProdutos(){
-  produtosTabela.innerHTML='';
-  vendaProduto.innerHTML='<option value="">Selecione o produto</option>';
-  produtos.forEach(p=>{
-    produtosTabela.innerHTML+=`<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td></td></tr>`;
-    vendaProduto.innerHTML+=`<option value="${p.nome}">${p.nome}</option>`;
-  });
 }
 
 // =======================
@@ -186,27 +171,26 @@ function atualizarValorVenda(){
 }
 
 function calcularTotal(){
-  const valor = parseFloat(vendaValor.value) || 0;
-  let desconto = parseFloat(vendaDesconto.value) || 0;
-  if(desconto > valor){ desconto = valor; vendaDesconto.value = valor.toFixed(2); }
-  vendaTotal.value = (valor - desconto).toFixed(2);
+  const valor = parseFloat(vendaValor.value)||0;
+  let desconto = parseFloat(vendaDesconto.value)||0;
+  if(desconto>valor) desconto=valor;
+  vendaTotal.value=(valor-desconto).toFixed(2);
 }
 
 async function registrarVenda(){
   const cliente = vendaCliente.value;
   const produto = vendaProduto.value;
   const valor = parseFloat(vendaValor.value);
-  const desconto = parseFloat(vendaDesconto.value) || 0;
+  const desconto = parseFloat(vendaDesconto.value)||0;
   const total = parseFloat(vendaTotal.value);
 
   if(!cliente || !produto) return alert('Selecione cliente e produto');
 
-  const res = await fetch(`${API_URL}/vendas`, {
+  const res = await fetch(`${API_URL}/vendas`,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({cliente, produto, valor, desconto, total})
   });
-
   if(res.ok){
     vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
     await fetchVendas();
@@ -214,20 +198,20 @@ async function registrarVenda(){
 }
 
 // =======================
-// HISTÓRICO E CAIXA
+// HISTÓRICO
 // =======================
 function renderVendas(){
-  vendasTabela.innerHTML='';
+  vendasTabela.innerHTML = '';
   let saldoTotal = 0;
   vendas.forEach(v=>{
     saldoTotal += v.total;
-    vendasTabela.innerHTML+=`
+    vendasTabela.innerHTML += `
       <tr>
         <td>${v.cliente}</td>
         <td>${v.produto}</td>
-        <td>R$ ${v.valor.toFixed(2)}</td>
-        <td>R$ ${v.desconto.toFixed(2)}</td>
-        <td>R$ ${v.total.toFixed(2)}</td>
+        <td>R$ ${parseFloat(v.valor).toFixed(2)}</td>
+        <td>R$ ${parseFloat(v.desconto).toFixed(2)}</td>
+        <td>R$ ${parseFloat(v.total).toFixed(2)}</td>
         <td>${new Date(v.data).toLocaleString()}</td>
       </tr>`;
   });
