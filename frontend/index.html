@@ -14,15 +14,19 @@ input, select, button { width: 100%; padding: 10px; margin: 5px 0; }
 button { background: #2d89ef; color: #fff; border: none; cursor: pointer; border-radius: 5px; }
 button:hover { background: #1b5fc4; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { border-bottom: 1px solid #ddd; padding: 8px; }
+th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
+.success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+.error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 </style>
 </head>
 
 <body>
 <div class="container">
 <h1>📊 Gestão de Caixa</h1>
+
+<div id="message"></div>
 
 <div class="grid">
 
@@ -67,6 +71,7 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <!-- HISTÓRICO -->
 <div class="card">
 <h2>📜 Histórico de Vendas</h2>
+<input id="searchVendas" placeholder="Pesquisar por cliente ou produto" oninput="filtrarVendas()">
 <table>
 <thead>
 <tr>
@@ -88,13 +93,22 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <h3>Saldo: R$ <span id="saldo">0.00</span></h3>
 </div>
 
+</div>
+
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
-
-// Estado
 let clientes = [];
 let produtos = [];
 let vendas = [];
+
+// =======================
+// MENSAGEM DE ALERTA
+// =======================
+function showMessage(msg, type='success'){
+  const div = document.getElementById('message');
+  div.innerHTML = `<div class="${type}">${msg}</div>`;
+  setTimeout(()=>{ div.innerHTML=''; }, 3000);
+}
 
 // =======================
 // CLIENTES
@@ -104,9 +118,7 @@ async function fetchClientes(){
     const res = await fetch(`${API_URL}/clientes`);
     clientes = await res.json();
     renderClientes();
-  } catch(e){
-    console.error('Erro ao buscar clientes:', e);
-  }
+  } catch(e){ console.error('Erro ao buscar clientes:', e); }
 }
 
 async function addCliente(){
@@ -120,15 +132,18 @@ async function addCliente(){
     if(res.ok){
       clienteNome.value='';
       await fetchClientes();
-    } else {
-      const err = await res.json();
-      console.error('Erro do backend:', err);
-      alert('Erro ao cadastrar cliente');
-    }
-  } catch(e){
-    console.error('Falha na requisição:', e);
-    alert('Erro de rede ao cadastrar cliente');
-  }
+      showMessage('Cliente cadastrado com sucesso!');
+    } else { showMessage('Erro ao cadastrar cliente','error'); }
+  } catch(e){ showMessage('Erro de rede ao cadastrar cliente','error'); }
+}
+
+async function deleteCliente(id){
+  if(!confirm('Tem certeza que deseja deletar este cliente?')) return;
+  try {
+    const res = await fetch(`${API_URL}/clientes/${id}`, { method:'DELETE' });
+    if(res.ok){ await fetchClientes(); showMessage('Cliente deletado!'); }
+    else showMessage('Erro ao deletar cliente','error');
+  } catch(e){ showMessage('Erro de rede ao deletar cliente','error'); }
 }
 
 function renderClientes(){
@@ -143,23 +158,6 @@ function renderClientes(){
   });
 }
 
-async function deleteCliente(id){
-  try {
-    const res = await fetch(`${API_URL}/clientes/${id}`, { method: 'DELETE' });
-    if(res.ok){
-      clientes = clientes.filter(c => c.id !== id);
-      renderClientes();
-    } else {
-      const err = await res.json();
-      console.error('Erro ao deletar cliente:', err);
-      alert('Erro ao deletar cliente');
-    }
-  } catch(e){
-    console.error('Erro de rede ao deletar cliente:', e);
-    alert('Erro ao deletar cliente');
-  }
-}
-
 // =======================
 // PRODUTOS
 // =======================
@@ -169,9 +167,7 @@ async function fetchProdutos(){
     const data = await res.json();
     produtos = data.map(p=>({id:p.id, nome:p.nome, valor:parseFloat(p.valor)}));
     renderProdutos();
-  } catch(e){
-    console.error('Erro ao buscar produtos:', e);
-  }
+  } catch(e){ console.error('Erro ao buscar produtos:', e); }
 }
 
 async function addProduto(){
@@ -183,18 +179,20 @@ async function addProduto(){
       body:JSON.stringify({nome:produtoNome.value, valor:parseFloat(produtoValor.value)})
     });
     if(res.ok){
-      produtoNome.value='';
-      produtoValor.value='';
+      produtoNome.value=''; produtoValor.value='';
       await fetchProdutos();
-    } else {
-      const err = await res.json();
-      console.error('Erro do backend:', err);
-      alert('Erro ao cadastrar produto');
-    }
-  } catch(e){
-    console.error('Falha na requisição:', e);
-    alert('Erro de rede ao cadastrar produto');
-  }
+      showMessage('Produto cadastrado com sucesso!');
+    } else { showMessage('Erro ao cadastrar produto','error'); }
+  } catch(e){ showMessage('Erro de rede ao cadastrar produto','error'); }
+}
+
+async function deleteProduto(id){
+  if(!confirm('Tem certeza que deseja deletar este produto?')) return;
+  try {
+    const res = await fetch(`${API_URL}/produtos/${id}`, { method:'DELETE' });
+    if(res.ok){ await fetchProdutos(); showMessage('Produto deletado!'); }
+    else showMessage('Erro ao deletar produto','error');
+  } catch(e){ showMessage('Erro de rede ao deletar produto','error'); }
 }
 
 function renderProdutos(){
@@ -210,23 +208,6 @@ function renderProdutos(){
   });
 }
 
-async function deleteProduto(id){
-  try {
-    const res = await fetch(`${API_URL}/produtos/${id}`, { method: 'DELETE' });
-    if(res.ok){
-      produtos = produtos.filter(p => p.id !== id);
-      renderProdutos();
-    } else {
-      const err = await res.json();
-      console.error('Erro ao deletar produto:', err);
-      alert('Erro ao deletar produto');
-    }
-  } catch(e){
-    console.error('Erro de rede ao deletar produto:', e);
-    alert('Erro ao deletar produto');
-  }
-}
-
 // =======================
 // VENDAS
 // =======================
@@ -235,9 +216,7 @@ async function fetchVendas(){
     const res = await fetch(`${API_URL}/vendas`);
     vendas = await res.json();
     renderVendas();
-  } catch(e){
-    console.error('Erro ao buscar vendas:', e);
-  }
+  } catch(e){ console.error('Erro ao buscar vendas:', e); }
 }
 
 function atualizarValorVenda(){
@@ -262,7 +241,7 @@ async function registrarVenda(){
   const cliente = clientes.find(c=>c.id===clienteId);
   const produto = produtos.find(p=>p.id===produtoId);
 
-  if(!cliente || !produto) return alert('Selecione cliente e produto');
+  if(!cliente || !produto) return showMessage('Selecione cliente e produto','error');
 
   const desconto = parseFloat(vendaDesconto.value)||0;
   const total = parseFloat(vendaTotal.value);
@@ -282,15 +261,9 @@ async function registrarVenda(){
     if(res.ok){
       vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
       await fetchVendas();
-    } else {
-      const err = await res.json();
-      console.error('Erro do backend:', err);
-      alert('Erro ao registrar venda');
-    }
-  } catch(e){
-    console.error('Falha na requisição:', e);
-    alert('Erro de rede ao registrar venda');
-  }
+      showMessage('Venda registrada com sucesso!');
+    } else showMessage('Erro ao registrar venda','error');
+  } catch(e){ showMessage('Erro de rede ao registrar venda','error'); }
 }
 
 // =======================
@@ -311,6 +284,16 @@ function renderVendas(){
     </tr>`;
   });
   document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
+}
+
+function filtrarVendas(){
+  const filtro = searchVendas.value.toLowerCase();
+  const linhas = vendasTabela.getElementsByTagName('tr');
+  Array.from(linhas).forEach(l=>{
+    const cliente = l.cells[0].innerText.toLowerCase();
+    const produto = l.cells[1].innerText.toLowerCase();
+    l.style.display = (cliente.includes(filtro)||produto.includes(filtro)) ? '' : 'none';
+  });
 }
 
 // =======================
