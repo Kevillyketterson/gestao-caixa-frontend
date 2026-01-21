@@ -20,15 +20,12 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 .success { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 .error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
 </style>
-
-<!-- jsPDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
 </head>
 
 <body>
 <div class="container">
 <h1>📊 Gestão de Caixa</h1>
+
 <div id="message"></div>
 
 <div class="grid">
@@ -63,17 +60,19 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
 <select id="vendaProduto"></select>
-<input id="vendaValor" readonly placeholder="Valor do produto">
-<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotalItem()">
-<button onclick="adicionarItem()">Adicionar ao Carrinho</button>
 
-<h3>🛒 Carrinho</h3>
+<input id="vendaValor" readonly placeholder="Valor do produto">
+<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)">
+<button onclick="adicionarItemVenda()">Adicionar Produto</button>
+
+<h3>Itens da venda:</h3>
 <table>
 <thead><tr><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th></th></tr></thead>
-<tbody id="carrinhoTabela"></tbody>
+<tbody id="itensVendaTabela"></tbody>
 </table>
-<h3>Total: R$ <span id="totalCarrinho">0.00</span></h3>
-<button onclick="finalizarVenda()">Finalizar Venda e Gerar Comprovante</button>
+
+<h3>Total da venda: R$ <span id="totalVenda">0.00</span></h3>
+<button onclick="registrarVenda()">Finalizar Venda</button>
 </div>
 
 <!-- HISTÓRICO -->
@@ -84,11 +83,10 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <thead>
 <tr>
 <th>Cliente</th>
-<th>Produto</th>
-<th>Valor</th>
-<th>Desconto</th>
+<th>Produtos</th>
 <th>Total</th>
 <th>Data</th>
+<th>Comprovante</th>
 </tr>
 </thead>
 <tbody id="vendasTabela"></tbody>
@@ -103,15 +101,16 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
 let clientes = [];
 let produtos = [];
 let vendas = [];
-let carrinho = [];
+let itensVenda = [];
 
 // =======================
-// MENSAGEM
+// MENSAGEM DE ALERTA
 // =======================
 function showMessage(msg, type='success'){
   const div = document.getElementById('message');
@@ -138,8 +137,11 @@ async function addCliente(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nome: clienteNome.value})
     });
-    if(res.ok){ clienteNome.value=''; await fetchClientes(); showMessage('Cliente cadastrado!'); }
-    else showMessage('Erro ao cadastrar cliente','error');
+    if(res.ok){
+      clienteNome.value='';
+      await fetchClientes();
+      showMessage('Cliente cadastrado com sucesso!');
+    } else { showMessage('Erro ao cadastrar cliente','error'); }
   } catch(e){ showMessage('Erro de rede ao cadastrar cliente','error'); }
 }
 
@@ -184,8 +186,11 @@ async function addProduto(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({nome:produtoNome.value, valor:parseFloat(produtoValor.value)})
     });
-    if(res.ok){ produtoNome.value=''; produtoValor.value=''; await fetchProdutos(); showMessage('Produto cadastrado!'); }
-    else showMessage('Erro ao cadastrar produto','error');
+    if(res.ok){
+      produtoNome.value=''; produtoValor.value='';
+      await fetchProdutos();
+      showMessage('Produto cadastrado com sucesso!');
+    } else { showMessage('Erro ao cadastrar produto','error'); }
   } catch(e){ showMessage('Erro de rede ao cadastrar produto','error'); }
 }
 
@@ -212,7 +217,7 @@ function renderProdutos(){
 }
 
 // =======================
-// VENDAS
+// VENDAS COM MULTI-ITENS
 // =======================
 function atualizarValorVenda(){
   const produtoId = parseInt(vendaProduto.value);
@@ -225,78 +230,126 @@ function calcularTotalItem(){
   const valor = parseFloat(vendaValor.value)||0;
   let desconto = parseFloat(vendaDesconto.value)||0;
   if(desconto>valor){ desconto=valor; vendaDesconto.value=valor.toFixed(2);}
+  return valor - desconto;
 }
 
-function adicionarItem(){
+function adicionarItemVenda(){
   const produtoId = parseInt(vendaProduto.value);
-  const produto = produtos.find(p=>p.id===produtoId);
+  const p = produtos.find(pr=>pr.id===produtoId);
+  if(!p) return showMessage('Selecione um produto','error');
+
   const desconto = parseFloat(vendaDesconto.value)||0;
-  if(!produto) return showMessage('Selecione um produto','error');
-  const total = produto.valor - desconto;
-  carrinho.push({produto: produto.nome, valor: produto.valor, desconto, total});
-  renderCarrinho();
+  const total = parseFloat((p.valor - desconto).toFixed(2));
+
+  itensVenda.push({ produto: p.nome, valor: p.valor, desconto, total });
+  renderItensVenda();
+  vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value='';
 }
 
-function removerItemCarrinho(index){
-  carrinho.splice(index,1);
-  renderCarrinho();
+function removerItemVenda(index){
+  itensVenda.splice(index,1);
+  renderItensVenda();
 }
 
-function renderCarrinho(){
-  const tbody = document.getElementById('carrinhoTabela');
+function renderItensVenda(){
+  const tbody = document.getElementById('itensVendaTabela');
   tbody.innerHTML='';
-  let totalCarrinho = 0;
-  carrinho.forEach((item,i)=>{
-    totalCarrinho += item.total;
+  let totalVenda=0;
+  itensVenda.forEach((item,index)=>{
+    totalVenda+=item.total;
     tbody.innerHTML += `<tr>
       <td>${item.produto}</td>
       <td>R$ ${item.valor.toFixed(2)}</td>
       <td>R$ ${item.desconto.toFixed(2)}</td>
       <td>R$ ${item.total.toFixed(2)}</td>
-      <td><button onclick="removerItemCarrinho(${i})">❌</button></td>
+      <td><button onclick="removerItemVenda(${index})">❌</button></td>
     </tr>`;
   });
-  document.getElementById('totalCarrinho').innerText = totalCarrinho.toFixed(2);
+  document.getElementById('totalVenda').innerText = totalVenda.toFixed(2);
 }
 
-async function finalizarVenda(){
+async function registrarVenda(){
   const clienteId = parseInt(vendaCliente.value);
   const cliente = clientes.find(c=>c.id===clienteId);
-  if(!cliente || carrinho.length===0) return showMessage('Selecione cliente e adicione produtos','error');
+  if(!cliente || itensVenda.length===0) return showMessage('Selecione cliente e adicione produtos','error');
+
+  const vendaParaEnviar = {
+    cliente: cliente.nome,
+    itens: itensVenda
+  };
 
   try {
     const res = await fetch(`${API_URL}/vendas`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        cliente: cliente.nome,
-        itens: carrinho
-      })
+      body: JSON.stringify(vendaParaEnviar)
     });
     if(res.ok){
-      gerarComprovantePDF({cliente: cliente.nome, itens: carrinho});
-      carrinho=[];
-      renderCarrinho();
+      itensVenda = [];
       vendaCliente.value='';
+      renderItensVenda();
       await fetchVendas();
-      showMessage('Venda finalizada com sucesso!');
-    } else showMessage('Erro ao finalizar venda','error');
-  } catch(e){ showMessage('Erro de rede ao finalizar venda','error'); }
+      showMessage('Venda registrada com sucesso!');
+      gerarComprovantePDF(vendaParaEnviar);
+    } else showMessage('Erro ao registrar venda','error');
+  } catch(e){ showMessage('Erro de rede ao registrar venda','error'); }
 }
 
 // =======================
-// COMPROVANTE PDF
+// HISTÓRICO E CAIXA
+// =======================
+function renderVendas(){
+  vendasTabela.innerHTML='';
+  let saldoTotal=0;
+  vendas.forEach(v=>{
+    saldoTotal += v.itens.reduce((s,i)=>s+i.total,0);
+    const produtosStr = v.itens.map(i=>i.produto).join(', ');
+    vendasTabela.innerHTML += `<tr>
+      <td>${v.cliente}</td>
+      <td>${produtosStr}</td>
+      <td>R$ ${v.itens.reduce((s,i)=>s+i.total,0).toFixed(2)}</td>
+      <td>${new Date(v.data).toLocaleString()}</td>
+      <td><button onclick='gerarComprovantePDF(${JSON.stringify(v)})'>📄</button></td>
+    </tr>`;
+  });
+  document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
+}
+
+function filtrarVendas(){
+  const filtro = searchVendas.value.toLowerCase();
+  const linhas = vendasTabela.getElementsByTagName('tr');
+  Array.from(linhas).forEach(l=>{
+    const cliente = l.cells[0].innerText.toLowerCase();
+    const produtos = l.cells[1].innerText.toLowerCase();
+    l.style.display = (cliente.includes(filtro)||produtos.includes(filtro)) ? '' : 'none';
+  });
+}
+
+// =======================
+// COMPROVANTE COM CÓDIGO
 // =======================
 function gerarComprovantePDF(venda) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+
+  const codigoVenda = Math.floor(100000 + Math.random() * 900000);
+
   doc.setFontSize(16);
   doc.text('Comprovante de Venda', 105, 20, {align:'center'});
-  doc.setFontSize(12);
-  doc.text(`Cliente: ${venda.cliente}`, 20, 40);
-  doc.text(`Data: ${new Date().toLocaleString()}`, 20, 50);
 
-  let startY = 70;
+  // Código da venda em retângulo
+  doc.setDrawColor(0);
+  doc.setFillColor(200, 200, 255);
+  doc.rect(150, 30, 40, 15, 'F');
+  doc.setTextColor(0);
+  doc.setFontSize(12);
+  doc.text(`#${codigoVenda}`, 170, 40, {align:'center'});
+
+  doc.setFontSize(12);
+  doc.text(`Cliente: ${venda.cliente}`, 20, 50);
+  doc.text(`Data: ${new Date().toLocaleString()}`, 20, 60);
+
+  let startY = 80;
   doc.text('Produto', 20, startY);
   doc.text('Valor', 90, startY);
   doc.text('Desconto', 130, startY);
@@ -316,49 +369,7 @@ function gerarComprovantePDF(venda) {
   doc.text(`TOTAL: R$ ${totalGeral.toFixed(2)}`, 130, startY);
   doc.text('Obrigado pela sua compra!', 105, startY+20, {align:'center'});
 
-  doc.save(`comprovante_${venda.cliente}_${Date.now()}.pdf`);
-}
-
-// =======================
-// HISTÓRICO E CAIXA
-// =======================
-async function fetchVendas(){
-  try { 
-    const res = await fetch(`${API_URL}/vendas`);
-    vendas = await res.json();
-    renderVendas();
-  } catch(e){ console.error('Erro ao buscar vendas:', e); }
-}
-
-function renderVendas(){
-  vendasTabela.innerHTML='';
-  let saldoTotal = 0;
-  vendas.forEach(v=>{
-    const itens = v.itens || [{produto: v.produto, valor: v.valor, desconto: v.desconto, total: v.total}];
-    let totalVenda = itens.reduce((s,i)=>s+i.total,0);
-    saldoTotal += totalVenda;
-    itens.forEach(item=>{
-      vendasTabela.innerHTML += `<tr>
-        <td>${v.cliente}</td>
-        <td>${item.produto}</td>
-        <td>R$ ${parseFloat(item.valor).toFixed(2)}</td>
-        <td>R$ ${parseFloat(item.desconto).toFixed(2)}</td>
-        <td>R$ ${parseFloat(item.total).toFixed(2)}</td>
-        <td>${new Date(v.data).toLocaleString()}</td>
-      </tr>`;
-    });
-  });
-  document.getElementById('saldo').innerText = saldoTotal.toFixed(2);
-}
-
-function filtrarVendas(){
-  const filtro = searchVendas.value.toLowerCase();
-  const linhas = vendasTabela.getElementsByTagName('tr');
-  Array.from(linhas).forEach(l=>{
-    const cliente = l.cells[0].innerText.toLowerCase();
-    const produto = l.cells[1].innerText.toLowerCase();
-    l.style.display = (cliente.includes(filtro)||produto.includes(filtro)) ? '' : 'none';
-  });
+  doc.save(`comprovante_${venda.cliente}_${codigoVenda}.pdf`);
 }
 
 // =======================
