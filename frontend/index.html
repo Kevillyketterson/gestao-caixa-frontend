@@ -60,9 +60,9 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 <div class="card">
 <h2>🧾 Nova Venda</h2>
 <select id="vendaCliente"></select>
-<select id="vendaProduto"></select>
+<select id="vendaProduto" onchange="atualizarValorVenda()"></select>
 <input id="vendaValor" readonly placeholder="Valor do produto">
-<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotal()">
+<input id="vendaDesconto" type="number" step="0.01" placeholder="Desconto (R$)" oninput="calcularTotalVendaAtual()">
 <button onclick="adicionarProdutoVenda()">Adicionar Produto</button>
 
 <h3>Produtos selecionados:</h3>
@@ -214,7 +214,7 @@ function atualizarValorVenda(){
 }
 
 function calcularTotalVendaAtual(){
-  const total = vendaAtual.reduce((s,i)=>s.total,s=0);
+  const total = vendaAtual.reduce((s,i)=>s+i.total,0);
   document.getElementById('vendaTotal').innerText = total.toFixed(2);
 }
 
@@ -265,10 +265,11 @@ async function registrarVenda(){
       body: JSON.stringify({cliente: cliente.nome, itens: vendaAtual})
     });
     if(res.ok){
+      const data = await res.json(); // <- converte a resposta para JSON
+      gerarComprovantePDF({cliente: cliente.nome, itens: data.itens || vendaAtual, codigo: data.codigo});
       vendaAtual=[]; renderProdutosSelecionados(); vendaCliente.value='';
       fetchVendas();
       showMessage('Venda registrada com sucesso!');
-      gerarComprovantePDF({cliente:cliente.nome, itens:res.itens||vendaAtual});
     } else showMessage('Erro ao registrar venda','error');
   } catch(e){ showMessage('Erro de rede ao registrar venda','error'); }
 }
@@ -280,13 +281,11 @@ function gerarComprovantePDF(venda){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
-  const codigoVenda = Math.floor(100000 + Math.random()*900000);
+  const codigoVenda = venda.codigo || Math.floor(100000 + Math.random()*900000);
 
-  // Título
   doc.setFontSize(16);
   doc.text('Comprovante de Venda', 105, 20, {align:'center'});
 
-  // Retângulo código
   const rectWidth = 50;
   const rectHeight = 15;
   const rectX = (doc.internal.pageSize.getWidth() - rectWidth)/2;
@@ -295,12 +294,10 @@ function gerarComprovantePDF(venda){
   doc.setFillColor(200,200,255);
   doc.rect(rectX, rectY, rectWidth, rectHeight,'F');
 
-  // Número dentro do retângulo
   doc.setTextColor(0);
   doc.setFontSize(14);
   doc.text(`#${codigoVenda}`, doc.internal.pageSize.getWidth()/2, rectY+rectHeight/1.5, {align:'center'});
 
-  // Dados
   doc.setFontSize(12);
   doc.text(`Cliente: ${venda.cliente}`, 20, 60);
   doc.text(`Data: ${new Date().toLocaleString()}`, 20, 70);
@@ -373,7 +370,6 @@ function init(){
   fetchClientes();
   fetchProdutos();
   fetchVendas();
-  vendaProduto.addEventListener('change', atualizarValorVenda);
 }
 
 init();
