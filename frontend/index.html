@@ -13,24 +13,26 @@ input, select, button { width: 100%; padding: 10px; margin: 5px 0; }
 button { background: #2d89ef; color: #fff; border: none; cursor: pointer; border-radius: 5px; }
 button:hover { background: #1b5fc4; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { border-bottom: 1px solid #ddd; padding: 8px; }
+th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
 .entrada { color: green; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
+
 <div class="container">
 <h1>📊 Gestão de Caixa</h1>
 
 <div class="grid">
+
 <!-- CLIENTES -->
 <div class="card">
 <h2>👤 Clientes</h2>
 <input id="clienteNome" placeholder="Nome do cliente">
 <button onclick="addCliente()">Cadastrar</button>
 <table>
-<thead><tr><th>Nome</th><th></th></tr></thead>
+<thead><tr><th>Nome</th><th>Ações</th></tr></thead>
 <tbody id="clientesTabela"></tbody>
 </table>
 </div>
@@ -42,10 +44,11 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <input id="produtoValor" type="number" step="0.01" placeholder="Valor">
 <button onclick="addProduto()">Cadastrar</button>
 <table>
-<thead><tr><th>Produto</th><th>Valor</th><th></th></tr></thead>
+<thead><tr><th>Produto</th><th>Valor</th><th>Ações</th></tr></thead>
 <tbody id="produtosTabela"></tbody>
 </table>
 </div>
+
 </div>
 
 <!-- VENDA -->
@@ -65,12 +68,7 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 <table>
 <thead>
 <tr>
-<th>Cliente</th>
-<th>Produto</th>
-<th>Valor</th>
-<th>Desconto</th>
-<th>Total</th>
-<th>Data</th>
+<th>Cliente</th><th>Produto</th><th>Valor</th><th>Desconto</th><th>Total</th><th>Data</th>
 </tr>
 </thead>
 <tbody id="vendasTabela"></tbody>
@@ -87,12 +85,10 @@ th, td { border-bottom: 1px solid #ddd; padding: 8px; }
 </table>
 </div>
 
-</div>
-
 <script>
 const API_URL = 'https://gestao-caixa-backend.onrender.com';
 
-// DOM
+// DOM Elements
 const clientesTabela = document.getElementById('clientesTabela');
 const vendaCliente = document.getElementById('vendaCliente');
 const produtosTabela = document.getElementById('produtosTabela');
@@ -111,75 +107,106 @@ let vendas = [];
 // CLIENTES
 // =======================
 async function fetchClientes(){
-  const res = await fetch(`${API_URL}/clientes`);
-  clientes = await res.json();
-  renderClientes();
+  try {
+    const res = await fetch(`${API_URL}/clientes`);
+    clientes = await res.json();
+    renderClientes();
+  } catch(err){
+    alert('Erro ao buscar clientes: '+err);
+  }
 }
 
 async function addCliente(){
   const nome = document.getElementById('clienteNome').value.trim();
-  if(!nome) return;
-  const res = await fetch(`${API_URL}/clientes`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome})
-  });
-  if(res.ok){
-    document.getElementById('clienteNome').value='';
-    await fetchClientes();
-  } else alert('Erro ao cadastrar cliente');
+  if(!nome) return alert('Digite um nome válido');
+  try{
+    const res = await fetch(`${API_URL}/clientes`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nome})
+    });
+    if(res.ok){
+      document.getElementById('clienteNome').value='';
+      await fetchClientes();
+    } else {
+      const msg = await res.text();
+      alert('Erro ao cadastrar cliente: '+msg);
+    }
+  } catch(err){ alert(err); }
 }
 
 function renderClientes(){
   clientesTabela.innerHTML='';
   vendaCliente.innerHTML='<option value="">Selecione o cliente</option>';
   clientes.forEach(c=>{
-    clientesTabela.innerHTML += `<tr><td>${c.nome}</td><td></td></tr>`;
+    clientesTabela.innerHTML += `<tr><td>${c.nome}</td><td><button onclick="deleteCliente(${c.id})">❌</button></td></tr>`;
     vendaCliente.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
   });
+}
+
+async function deleteCliente(id){
+  try{
+    const res = await fetch(`${API_URL}/clientes/${id}`, {method:'DELETE'});
+    if(res.ok) await fetchClientes();
+    else alert('Erro ao deletar cliente');
+  } catch(err){ alert(err); }
 }
 
 // =======================
 // PRODUTOS
 // =======================
 async function fetchProdutos(){
-  const res = await fetch(`${API_URL}/produtos`);
-  produtos = await res.json();
-  renderProdutos();
+  try{
+    const res = await fetch(`${API_URL}/produtos`);
+    produtos = await res.json();
+    renderProdutos();
+  } catch(err){ alert('Erro ao buscar produtos'); }
 }
 
 async function addProduto(){
   const nome = document.getElementById('produtoNome').value.trim();
   const valor = parseFloat(document.getElementById('produtoValor').value);
-  if(!nome || !valor) return;
-  const res = await fetch(`${API_URL}/produtos`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({nome, valor})
-  });
-  if(res.ok){
-    document.getElementById('produtoNome').value='';
-    document.getElementById('produtoValor').value='';
-    await fetchProdutos();
-  } else alert('Erro ao cadastrar produto');
+  if(!nome || !valor) return alert('Digite nome e valor válidos');
+  try{
+    const res = await fetch(`${API_URL}/produtos`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nome, valor})
+    });
+    if(res.ok){
+      document.getElementById('produtoNome').value='';
+      document.getElementById('produtoValor').value='';
+      await fetchProdutos();
+    } else alert('Erro ao cadastrar produto');
+  } catch(err){ alert(err); }
 }
 
 function renderProdutos(){
   produtosTabela.innerHTML='';
   vendaProduto.innerHTML='<option value="">Selecione o produto</option>';
   produtos.forEach(p=>{
-    produtosTabela.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td></td></tr>`;
+    produtosTabela.innerHTML += `<tr><td>${p.nome}</td><td>R$ ${parseFloat(p.valor).toFixed(2)}</td><td><button onclick="deleteProduto(${p.id})">❌</button></td></tr>`;
     vendaProduto.innerHTML += `<option value="${p.id}">${p.nome}</option>`;
   });
+}
+
+async function deleteProduto(id){
+  try{
+    const res = await fetch(`${API_URL}/produtos/${id}`, {method:'DELETE'});
+    if(res.ok) await fetchProdutos();
+    else alert('Erro ao deletar produto');
+  } catch(err){ alert(err); }
 }
 
 // =======================
 // VENDAS
 // =======================
 async function fetchVendas(){
-  const res = await fetch(`${API_URL}/vendas`);
-  vendas = await res.json();
-  renderVendas();
+  try{
+    const res = await fetch(`${API_URL}/vendas`);
+    vendas = await res.json();
+    renderVendas();
+  } catch(err){ alert('Erro ao buscar vendas'); }
 }
 
 function atualizarValorVenda(){
@@ -207,30 +234,27 @@ async function registrarVenda(){
 
   if(!cliente || !produto) return alert('Selecione cliente e produto');
 
-  const res = await fetch(`${API_URL}/vendas`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      cliente: cliente.nome,
-      produto: produto.nome,
-      valor,
-      desconto,
-      total
-    })
-  });
-
-  if(res.ok){
-    vendaCliente.value='';
-    vendaProduto.value='';
-    vendaValor.value='';
-    vendaDesconto.value='';
-    vendaTotal.value='';
-    await fetchVendas();
-  } else alert('Erro ao registrar venda');
+  try{
+    const res = await fetch(`${API_URL}/vendas`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        cliente: cliente.nome,
+        produto: produto.nome,
+        valor,
+        desconto,
+        total
+      })
+    });
+    if(res.ok){
+      vendaCliente.value=''; vendaProduto.value=''; vendaValor.value=''; vendaDesconto.value=''; vendaTotal.value='';
+      await fetchVendas();
+    } else alert('Erro ao registrar venda');
+  } catch(err){ alert(err); }
 }
 
 // =======================
-// HISTÓRICO
+// HISTÓRICO E CAIXA
 // =======================
 function renderVendas(){
   vendasTabela.innerHTML='';
@@ -261,5 +285,6 @@ async function init(){
 
 init();
 </script>
+
 </body>
 </html>
